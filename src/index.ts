@@ -199,6 +199,11 @@ const findCities = async (term: string, limit: number) => {
 };
 
 const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
+  await interaction.reply({
+    content: 'Searching cities database...',
+    ephemeral: true,
+    flags: MessageFlags.SuppressEmbeds,
+  });
   const { customId, member } = interaction;
   if (!customId || !member || !('_roles' in member)) return;
   const term = interaction.fields.getTextInputValue('search-input');
@@ -207,10 +212,7 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
   const cities = await findCities(term, limit);
 
   if (!cities.length) {
-    await interaction.reply({
-      content: 'No cities found.',
-      ephemeral: true,
-    });
+    await interaction.editReply('No cities found.');
     return;
   }
 
@@ -269,12 +271,7 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
         })),
       ),
   ]);
-  await interaction.reply({
-    content,
-    ephemeral: true,
-    flags: MessageFlags.SuppressEmbeds,
-    components: [row],
-  });
+  await interaction.editReply({ content, components: [row] });
 };
 
 const handleCitySelect = async (x: StringSelectMenuInteraction) => {
