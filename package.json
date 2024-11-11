@@ -1,0 +1,17 @@
+{
+  "name": "localmeet",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node out/index.js"
+  },
+  "dependencies": {
+    "cities.json": "^1.1.42",
+    "countries-list": "^3.1.1",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.0.3",
+    "fuse.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
