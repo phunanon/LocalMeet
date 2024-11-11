@@ -31,31 +31,19 @@ export const findNearest = async (snowflake: string, n: number) => {
     if (sf === snowflake) continue;
     const lat2 = parseFloat(lat2Txt);
     const lng2 = parseFloat(lng2Txt);
-    const distance = Math.sqrt((lat - lat2) ** 2 + (lng - lng2) ** 2);
+    const distance = haversineDistance(lat, lng, lat2, lng2);
     userDistances.push({ sf, distance, lat: lat2, lng: lng2 });
   }
-  const closest: typeof userDistances = userDistances.slice(0, n);
-  if (!closest[0]) return;
-  let furthest = closest.reduce((a, b) => {
-    if (a.distance < b.distance) return a;
-    return b;
-  }, closest[0]);
-  for (const user of userDistances) {
-    if (user.distance > furthest.distance) continue;
-    closest.unshift(user);
-    closest.splice(
-      closest.findIndex(x => x.sf === furthest.sf),
-      1,
-    );
-    furthest = closest.reduce(
-      (a, b) => (a.distance < b.distance ? a : b),
-      closest[0],
-    );
+  const nearest: typeof userDistances = userDistances
+    .slice(0, n)
+    .sort((a, b) => a.distance - b.distance);
+  if (!nearest[0]) return;
+  for (let u = n; u < userDistances.length; ++u) {
+    const user = userDistances[u]!;
+    if (user.distance > nearest.at(-1)!.distance) continue;
+    nearest.unshift(user);
+    nearest.pop();
   }
-  const nearest = closest.map(c => ({
-    ...c,
-    distance: haversineDistance(c.lat, c.lng, lat, lng),
-  }));
   nearest.sort((a, b) => a.distance - b.distance);
   return { nearest, count: lines.length };
 };

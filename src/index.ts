@@ -310,13 +310,15 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
   const members = await guild.members.fetch();
   const { nearest, count } = results;
   const content =
-    `The database of ${count} people was searched. Check back later to see if there's new people nearby!
+    `Searched ${count.toLocaleString()} people. Check again later to see new people nearby!
 ## People nearest to you
 ` +
     nearest
       .map(({ sf, distance }) => {
         const user = members.get(sf);
-        const tag = user ? ` (\`${user.user.tag}\`)` : ``;
+        const tag = user
+          ? ` (\`${user.user.tag}\`)`
+          : ` (no longer in the server)`;
         const km = (round(distance / 10) * 10).toLocaleString().padStart(5);
         return `- \`${km}\` km away - <@${sf}>${tag}`;
       })
