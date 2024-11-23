@@ -12,9 +12,10 @@ import { ModalBuilder, ModalSubmitInteraction } from 'discord.js';
 import { Client, StringSelectMenuInteraction } from 'discord.js';
 import { TextInputBuilder, TextInputStyle } from 'discord.js';
 import { StringSelectMenuBuilder, Guild } from 'discord.js';
-import { addUser, searchDatabase, userWhen } from './db';
+import { addUser, searchDatabase, userWhen } from './db.js';
 import Fuse from 'fuse.js';
 import { countries, TCountryCode } from 'countries-list';
+import { RenderMap } from './map.js';
 const { floor, round } = Math;
 dotenv.config();
 const { DISCORD_TOKEN } = process.env;
@@ -71,7 +72,7 @@ client.on('interactionCreate', async x => {
 });
 
 client.once('ready', async () => {
-  console.log('Ready.');
+  console.log('Loading...');
   await client.application?.commands.create({
     name: 'find-city-here',
     description: 'City search in this channel.',
@@ -80,7 +81,7 @@ client.once('ready', async () => {
     name: 'find-nearby-here',
     description: 'People near you search in this channel.',
   });
-  console.log('Done.');
+  console.log('Ready.');
 });
 
 client.login(DISCORD_TOKEN);
@@ -281,6 +282,7 @@ const handleCitySelect = async (interaction: StringSelectMenuInteraction) => {
 
 const handleListNearby = async (interaction: ButtonInteraction) => {
   await interaction.deferReply({ ephemeral: true });
+
   const { guild, member } = interaction;
   if (!guild || !member) {
     await interaction.editReply('Error - try again later.');
@@ -313,6 +315,11 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
       })
       .join('\n');
   await interaction.editReply(content);
+
+  const { path } = await RenderMap(results);
+  await interaction.message.edit({
+    files: [{ attachment: path, name: 'map.png' }],
+  });
 };
 
 const IsModerator = async (guild: Guild, member: GuildMember, userSf: bigint) =>
