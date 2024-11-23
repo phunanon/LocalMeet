@@ -1,6 +1,11 @@
 import * as dotenv from 'dotenv';
 import assert from 'assert';
-import { ActionRowBuilder, ButtonInteraction, ButtonStyle } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonInteraction,
+  ButtonStyle,
+  GuildMember,
+} from 'discord.js';
 import { ChannelType, CommandInteraction } from 'discord.js';
 import { ComponentType, IntentsBitField, MessageFlags } from 'discord.js';
 import { ModalBuilder, ModalSubmitInteraction } from 'discord.js';
@@ -22,6 +27,19 @@ const client = new Client({
 
 client.on('interactionCreate', async x => {
   if (x.isCommand()) {
+    if (!x.guild) {
+      await x.reply('This command is only available in guilds.');
+      return;
+    }
+    const member = await x.guild.members.fetch(x.user.id);
+    if (!member) {
+      await x.reply('You are not in a guild.');
+      return;
+    }
+    if (!IsModerator(x.guild, member, BigInt(x.user.id))) {
+      await x.reply('You must be a moderator to use this command.');
+      return;
+    }
     if (x.commandName === 'find-city-here')
       await x.reply({
         content: (await handleSearchHere(x)) ? 'Done.' : 'Errored.',
@@ -296,3 +314,10 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
       .join('\n');
   await interaction.editReply(content);
 };
+
+const IsModerator = async (guild: Guild, member: GuildMember, userSf: bigint) =>
+  (BigInt(guild.ownerId) === userSf ||
+    (guild.members.me &&
+      member.roles.highest.position >=
+        guild.members.me.roles.highest.position)) ??
+  false;
