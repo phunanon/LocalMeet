@@ -7,7 +7,7 @@ import { ModalBuilder, ModalSubmitInteraction } from 'discord.js';
 import { Client, StringSelectMenuInteraction } from 'discord.js';
 import { TextInputBuilder, TextInputStyle } from 'discord.js';
 import { StringSelectMenuBuilder, Guild } from 'discord.js';
-import { addUser, findNearest, userWhen } from './db';
+import { addUser, searchDatabase, userWhen } from './db';
 import Fuse from 'fuse.js';
 import { countries, TCountryCode } from 'countries-list';
 const { floor, round } = Math;
@@ -44,19 +44,13 @@ client.on('interactionCreate', async x => {
     if (x.customId === 'city-select') {
       await x.update({
         content: (await handleCitySelect(x))
-          ? 'Your city has been recorded successfully.'
+          ? 'Your town/city has been recorded successfully.'
           : 'There was an error. Try another search.',
         components: [],
       });
     }
   }
 });
-
-const findCitySelectedRole = async (guild: Guild) => {
-  const roles = await guild.roles.fetch();
-  const role = roles.find(x => x.name === 'City selected');
-  return role ?? (await guild.roles.create({ name: 'City selected' }));
-};
 
 client.once('ready', async () => {
   console.log('Ready.');
@@ -68,12 +62,6 @@ client.once('ready', async () => {
     name: 'find-nearby-here',
     description: 'People near you search in this channel.',
   });
-  const guilds = await client.guilds.fetch();
-  for (const [, guild] of guilds) {
-    const fetched = await guild.fetch();
-    if (!fetched) continue;
-    await findCitySelectedRole(fetched);
-  }
   console.log('Done.');
 });
 
@@ -83,16 +71,8 @@ const handleSearchHere = async (interaction: CommandInteraction) => {
   const { channel, guild } = interaction;
   if (!channel || !guild) return;
   if (channel.type !== ChannelType.GuildText) return;
-  await channel.permissionOverwrites.create(guild.roles.everyone, {
-    ViewChannel: true,
-    SendMessages: false,
-    AddReactions: false,
-  });
-  await channel.permissionOverwrites.create(interaction.client.user, {
-    SendMessages: true,
-  });
   await channel.send({
-    content: `## First, let's find your city.`,
+    content: `## First, let's find your town or city.`,
     components: [
       {
         type: ComponentType.ActionRow,
@@ -115,14 +95,6 @@ const handleNearbyHere = async (interaction: CommandInteraction) => {
   const { channel, guild } = interaction;
   if (!channel || !guild) return;
   if (channel.type !== ChannelType.GuildText) return;
-  await channel.permissionOverwrites.create(guild.roles.everyone, {
-    ViewChannel: true,
-    SendMessages: false,
-    AddReactions: false,
-  });
-  await channel.permissionOverwrites.create(interaction.client.user, {
-    SendMessages: true,
-  });
   await channel.send({
     content: nearbyIntro,
     components: [
@@ -160,7 +132,7 @@ const handleSearchCities = async (interaction: ButtonInteraction) => {
     );
     if (addedWhen && addedWhen > threeMonthsAgo) {
       await interaction.reply({
-        content: `You can change your city again <t:${canChangeIn}:R>.`,
+        content: `You can change your town/city again <t:${canChangeIn}:R>.`,
         ephemeral: true,
       });
       return;
@@ -169,13 +141,13 @@ const handleSearchCities = async (interaction: ButtonInteraction) => {
 
   const modal = new ModalBuilder()
     .setCustomId('city-search-modal')
-    .setTitle('Search for your city')
+    .setTitle('Search for your town/city')
     .setComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents([
         new TextInputBuilder()
           .setCustomId('search-input')
-          .setLabel('Enter the name of your city')
-          .setPlaceholder('We have a database of 125000 cities!')
+          .setLabel('Enter the name of your town/city')
+          .setPlaceholder('We have a database of 125000 towns & cities!')
           .setStyle(TextInputStyle.Short)
           .setRequired(true),
       ]),
@@ -204,8 +176,8 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
     ephemeral: true,
     flags: MessageFlags.SuppressEmbeds,
   });
-  const { customId, member } = interaction;
-  if (!customId || !member || !('_roles' in member)) return;
+  const { customId } = interaction;
+  if (!customId) return;
   const term = interaction.fields.getTextInputValue('search-input');
 
   const limit = 16;
@@ -249,9 +221,9 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
 
   const content =
     `## Search results
-- If you can't find your city, search for another city near to you
+- If you can't find your town/city, search for another town/city near to you
 - You can click on them to confirm it is correct in Google Maps
-- Once you've chosen your city, you won't be able to change it again for three months` +
+- Once you've chosen your town/city, you won't be able to change it again for three months` +
     Object.entries(infosByCountry).map(([country, infos]) => {
       return (
         `
@@ -263,7 +235,7 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents([
     new StringSelectMenuBuilder()
       .setCustomId('city-select')
-      .setPlaceholder('Select your city')
+      .setPlaceholder('Select your town/city')
       .setOptions(
         cityInfos.map((x, i) => ({
           label: `${x.label}`,
@@ -274,20 +246,17 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
   await interaction.editReply({ content, components: [row] });
 };
 
-const handleCitySelect = async (x: StringSelectMenuInteraction) => {
-  const { guild, member } = x;
-  const latlng = x.values[0];
-  if (!latlng || !guild || !member || !('_roles' in member)) return;
+const handleCitySelect = async (interaction: StringSelectMenuInteraction) => {
+  const { guild } = interaction;
+  const latlng = interaction.values[0];
+  if (!latlng || !guild) return;
   const [latTxt, lngTxt] = latlng.split(',');
   if (!latTxt || !lngTxt) return;
   const lat = parseFloat(latTxt);
   const lng = parseFloat(lngTxt);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-  await addUser(x.user.id, lat, lng);
-
-  const role = await findCitySelectedRole(guild);
-  await member.roles.add(role);
+  await addUser(interaction.user.id, lat, lng);
 
   return true;
 };
@@ -300,27 +269,29 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
     return;
   }
 
-  const results = await findNearest(member.user.id, 10);
+  const results = await searchDatabase(member.user.id);
   if (!results) {
     await interaction.editReply(
-      'You need to have searched for your city first.',
+      'You need to have searched for your town/city first.',
     );
     return;
   }
+  const N = 10;
   const members = await guild.members.fetch();
-  const { nearest, count } = results;
+  const nearest: { sf: string; distance: number; tag: string }[] = [];
+  for (const { sf, distance } of results) {
+    const member = members.get(sf);
+    if (member) nearest.push({ sf, distance, tag: member.user.tag });
+    if (nearest.length >= N) break;
+  }
   const content =
-    `Searched ${count.toLocaleString()} people. Check again later to see new people nearby!
+    `Searched ${results.length.toLocaleString()} people. Check again later to see new people nearby!
 ## People nearest to you
 ` +
     nearest
-      .map(({ sf, distance }) => {
-        const user = members.get(sf);
-        const tag = user
-          ? ` (\`${user.user.tag}\`)`
-          : ` (no longer in the server)`;
+      .map(({ sf, distance, tag }) => {
         const km = (round(distance / 10) * 10).toLocaleString().padStart(5);
-        return `- \`${km}\` km away - <@${sf}>${tag}`;
+        return `- \`${km}\` km away - <@${sf}> (\`${tag}\`)`;
       })
       .join('\n');
   await interaction.editReply(content);

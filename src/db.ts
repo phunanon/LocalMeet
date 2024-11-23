@@ -15,12 +15,12 @@ export const userWhen = async (snowflake: string) => {
   return new Date(parseInt(ms ?? '0'));
 };
 
-export const findNearest = async (snowflake: string, n: number) => {
+export const searchDatabase = async (snowflake: string) => {
   const lines = (await readFile(file, 'utf-8')).split('\n').slice(0, -1);
   const userLocation = lines.find(x => x.startsWith(snowflake))?.split(',');
   if (!userLocation?.length) return;
   const [, lat, lng] = userLocation.map(parseFloat) as [number, number, number];
-  const userDistances: {
+  const distances: {
     sf: string;
     distance: number;
     lat: number;
@@ -32,20 +32,10 @@ export const findNearest = async (snowflake: string, n: number) => {
     const lat2 = parseFloat(lat2Txt);
     const lng2 = parseFloat(lng2Txt);
     const distance = haversineDistance(lat, lng, lat2, lng2);
-    userDistances.push({ sf, distance, lat: lat2, lng: lng2 });
+    distances.push({ sf, distance, lat: lat2, lng: lng2 });
   }
-  const nearest: typeof userDistances = userDistances
-    .slice(0, n)
-    .sort((a, b) => a.distance - b.distance);
-  if (!nearest[0]) return;
-  for (let u = n; u < userDistances.length; ++u) {
-    const user = userDistances[u]!;
-    if (user.distance > nearest.at(-1)!.distance) continue;
-    nearest.unshift(user);
-    nearest.pop();
-  }
-  nearest.sort((a, b) => a.distance - b.distance);
-  return { nearest, count: lines.length };
+  distances.sort((a, b) => a.distance - b.distance);
+  return distances;
 };
 
 const { sin, cos, atan2, sqrt, PI } = Math;
