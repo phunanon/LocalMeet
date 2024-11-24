@@ -12,10 +12,13 @@ import { ModalBuilder, ModalSubmitInteraction } from 'discord.js';
 import { Client, StringSelectMenuInteraction } from 'discord.js';
 import { TextInputBuilder, TextInputStyle } from 'discord.js';
 import { StringSelectMenuBuilder, Guild } from 'discord.js';
+import { readFile } from 'fs/promises';
 import { addUser, searchDatabase, userWhen } from './db.js';
 import Fuse from 'fuse.js';
 import { countries, TCountryCode } from 'countries-list';
 import { RenderMap } from './map.js';
+import { Worker } from 'worker_threads';
+import path from 'path';
 const { floor, round } = Math;
 dotenv.config();
 const { DISCORD_TOKEN } = process.env;
@@ -187,7 +190,8 @@ const findCities = async (term: string, limit: number) => {
     admin1: string;
     admin2: string;
   }[];
-  const cities = require('cities.json') as CitiesJson;
+  const json = await readFile('node_modules/cities.json/cities.json');
+  const cities = JSON.parse(json.toString()) as CitiesJson;
   const citySearcher = new Fuse(cities, { keys: ['name'] });
   return citySearcher.search(term, { limit }).map(x => x.item);
 };
@@ -211,8 +215,10 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
   }
 
   type NameAndCode = { name: string; code: string };
-  const admin1s = require('cities.json/admin1.json') as NameAndCode[];
-  const admin2s = require('cities.json/admin2.json') as NameAndCode[];
+  const admin1Json = await readFile('node_modules/cities.json/admin1.json');
+  const admin2Json = await readFile('node_modules/cities.json/admin2.json');
+  const admin1s = JSON.parse(admin1Json.toString()) as NameAndCode[];
+  const admin2s = JSON.parse(admin2Json.toString()) as NameAndCode[];
 
   const cityInfos = cities.map(
     ({ name, lat, lng, country, admin1, admin2 }, i) => {
@@ -319,11 +325,29 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
       .join('\n');
   await interaction.editReply(content);
 
-  const { path } = await RenderMap(results);
-  await interaction.message.edit({
-    files: [{ attachment: path, name: 'map.png' }],
-  });
+  await CallMapWorker(interaction, results);
 };
+
+async function CallMapWorker(
+  interaction: ButtonInteraction,
+  coords: { lat: number; lng: number }[],
+) {
+  const attachment = await new Promise<string>((resolve, reject) => {
+    const worker = new Worker(path.resolve('./out/map-worker.js'), {
+      workerData: coords,
+    });
+    worker.on('message', resolve);
+    worker.on('error', reject);
+    worker.on('exit', code => {
+      if (code !== 0)
+        reject(new Error(`Worker stopped with exit code ${code}`));
+    });
+  });
+
+  await interaction.message.edit({
+    files: [{ attachment, name: 'map.png' }],
+  });
+}
 
 const IsModerator = (guild: Guild, member: GuildMember, userSf: bigint) =>
   (BigInt(guild.ownerId) === userSf ||
