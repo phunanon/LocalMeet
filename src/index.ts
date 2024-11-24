@@ -38,7 +38,10 @@ client.on('interactionCreate', async x => {
       return;
     }
     if (!IsModerator(x.guild, member, BigInt(x.user.id))) {
-      await x.reply('You must be a moderator to use this command.');
+      await x.reply({
+        content: 'You must be a moderator to use this command.',
+        ephemeral: true,
+      });
       return;
     }
     if (x.commandName === 'find-city-here')
@@ -135,7 +138,7 @@ const handleNearbyHere = async (interaction: CommandInteraction) => {
 
 const handleSearchCities = async (interaction: ButtonInteraction) => {
   const { guild, member } = interaction;
-  if (!guild || !member || !('_roles' in member)) {
+  if (!guild || !member) {
     await interaction.reply({
       content: 'Error - try again later.',
       ephemeral: true,
@@ -322,7 +325,7 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
   });
 };
 
-const IsModerator = async (guild: Guild, member: GuildMember, userSf: bigint) =>
+const IsModerator = (guild: Guild, member: GuildMember, userSf: bigint) =>
   (BigInt(guild.ownerId) === userSf ||
     (guild.members.me &&
       member.roles.highest.position >=
