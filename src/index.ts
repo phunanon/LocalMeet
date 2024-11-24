@@ -28,6 +28,7 @@ const client = new Client({
   intents: [IntentsBitField.Flags.Guilds, IntentsBitField.Flags.GuildMembers],
   closeTimeout: 6_000,
 });
+let generatingMap = false;
 
 client.on('interactionCreate', async x => {
   if (x.isCommand()) {
@@ -332,21 +333,27 @@ async function CallMapWorker(
   interaction: ButtonInteraction,
   coords: { lat: number; lng: number }[],
 ) {
-  const attachment = await new Promise<string>((resolve, reject) => {
-    const worker = new Worker(path.resolve('./out/map-worker.js'), {
-      workerData: coords,
+  if (generatingMap) return;
+  generatingMap = true;
+  try {
+    const attachment = await new Promise<string>((resolve, reject) => {
+      const worker = new Worker(path.resolve('./out/map-worker.js'), {
+        workerData: coords,
+      });
+      worker.on('message', resolve);
+      worker.on('error', reject);
+      worker.on('exit', code => {
+        if (code !== 0)
+          reject(new Error(`Worker stopped with exit code ${code}`));
+      });
     });
-    worker.on('message', resolve);
-    worker.on('error', reject);
-    worker.on('exit', code => {
-      if (code !== 0)
-        reject(new Error(`Worker stopped with exit code ${code}`));
-    });
-  });
 
-  await interaction.message.edit({
-    files: [{ attachment, name: 'map.png' }],
-  });
+    await interaction.message.edit({
+      files: [{ attachment, name: 'map.png' }],
+    });
+  } finally {
+    generatingMap = false;
+  }
 }
 
 const IsModerator = (guild: Guild, member: GuildMember, userSf: bigint) =>
