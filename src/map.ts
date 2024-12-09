@@ -4,7 +4,9 @@ import { createReadStream, createWriteStream } from 'fs';
 const width = 3100;
 const height = 1600;
 
-export const RenderMap = async (coords: { lat: number; lng: number }[]) => {
+export const RenderMap = async (
+  coords: { lat: number; lng: number; inactive: boolean }[],
+) => {
   const canvas = make(width, height);
   const ctx = canvas.getContext('2d');
 
@@ -13,11 +15,11 @@ export const RenderMap = async (coords: { lat: number; lng: number }[]) => {
 
   ctx.drawImage(map, 0, 0, map.width, map.height, 0, 0, width, height);
 
-  for (const { lat, lng } of coords) {
+  for (const { lat, lng, inactive } of coords) {
     const { x, y } = latLngToRobinson(lat, lng, width, height);
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+    ctx.fillStyle = inactive ? 'rgba(255, 0, 0, 0.25)' : 'rgba(0, 200, 0, 0.5)';
     ctx.fill();
   }
 

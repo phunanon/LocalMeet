@@ -238,6 +238,7 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
         lat,
         lng,
         urlLabel: `**[${name}](${url})** in ${location}`,
+        noUrlLabel: `**${name}** in ${location}`,
         label: `${name} in ${locationAndCountry}`,
       };
     },
@@ -248,18 +249,29 @@ const handleSearchCitySubmit = async (interaction: ModalSubmitInteraction) => {
     return acc;
   }, {} as Record<string, typeof cityInfos>);
 
-  const content =
-    `## Search results
+  const makeContent = (withMapLinks: boolean) => {
+    return (
+      `## Search results
 - If you can't find your town/city, search for another town/city near to you
-- You can click on them to confirm it is correct in Google Maps
+- ${
+        withMapLinks
+          ? 'You can click on them to confirm it is correct in Google Maps'
+          : 'There were too many towns/cities to provide Google Maps links - try searching for another town/city near to you'
+      }
 - Once you've chosen your town/city, you won't be able to change it again for three months` +
-    Object.entries(infosByCountry).map(([country, infos]) => {
-      return (
-        `
+      Object.entries(infosByCountry).map(([country, infos]) => {
+        return (
+          `
 ### ${countries[country as TCountryCode]?.name}
-` + infos.map(x => x.urlLabel).join('\n')
-      );
-    });
+` + infos.map(x => (withMapLinks ? x.urlLabel : x.noUrlLabel)).join('\n')
+        );
+      })
+    );
+  };
+  const content = (() => {
+    const content = makeContent(true);
+    return content.length < 1_750 ? content : makeContent(false);
+  })();
 
   const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents([
     new StringSelectMenuBuilder()
@@ -326,12 +338,15 @@ const handleListNearby = async (interaction: ButtonInteraction) => {
       .join('\n');
   await interaction.editReply(content);
 
-  await CallMapWorker(interaction, results);
+  await CallMapWorker(
+    interaction,
+    results.map(x => ({ ...x, inactive: !members.get(x.sf) })),
+  );
 };
 
 async function CallMapWorker(
   interaction: ButtonInteraction,
-  coords: { lat: number; lng: number }[],
+  coords: { lat: number; lng: number; inactive: boolean }[],
 ) {
   if (generatingMap) return;
   generatingMap = true;
